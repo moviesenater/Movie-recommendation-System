@@ -1,5 +1,7 @@
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellRenderer;
 import java.awt.*;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -26,9 +28,12 @@ public class http {
         JButton fetchButton = new JButton("Fetch Movies");
 
         // Create table to display the movie data
-        DefaultTableModel tableModel = new DefaultTableModel(new Object[]{"Title", "Image URL", "Rating"}, 0);
+        DefaultTableModel tableModel = new DefaultTableModel(new Object[]{"Title", "Image", "Rating"}, 0);
         JTable table = new JTable(tableModel);
         JScrollPane scrollPane = new JScrollPane(table);
+
+        // Set the custom cell renderer for the second column (image column)
+        table.getColumnModel().getColumn(1).setCellRenderer(new ImageRenderer());
 
         fetchButton.addActionListener(e -> {
             String genre = genreField.getText();
@@ -81,11 +86,25 @@ public class http {
                 for (int i = 0; i < limit; i++) {
                     JSONObject movie = (JSONObject) results.get(i);
                     String title = (String) movie.get("title");
-                    JSONArray img = (JSONArray) movie.get("imageurl");
+                    JSONArray imgUrls = (JSONArray) movie.get("imageurl");
+
+                    ImageIcon imageIcon = null;
+                    if (imgUrls != null && !imgUrls.isEmpty()) {
+                        // Get the first image URL
+                        String imageUrl = (String) imgUrls.get(0);
+
+                        // Load the image from the URL using ImageIcon
+                        try {
+                            imageIcon = new ImageIcon(new URI(imageUrl).toURL());
+                        } catch (Exception e) {
+                            // Handle any errors while loading the image
+                            e.printStackTrace();
+                        }
+                    }
 
                     Object[] rowData = new Object[3];
                     rowData[0] = title;
-                    rowData[1] = (img != null && !img.isEmpty()) ? img.get(0) : "No Image";
+                    rowData[1] = imageIcon; // Use the ImageIcon object instead of the image URL
 
                     try {
                         Double rating = (Double) movie.get("imdbrating");
@@ -101,6 +120,25 @@ public class http {
         } catch (Exception e) {
             JOptionPane.showMessageDialog(null, "Error occurred: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
+        }
+    }
+
+    // Custom cell renderer to display the ImageIcon properly in the table cell
+    private static class ImageRenderer extends JLabel implements TableCellRenderer {
+        public ImageRenderer() {
+            setOpaque(true);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            if (value instanceof ImageIcon) {
+                ImageIcon icon = (ImageIcon) value;
+                setIcon(icon);
+            } else {
+                // If the value is not an ImageIcon, clear the icon to prevent displaying old images in the table.
+                setIcon(null);
+            }
+            return this;
         }
     }
 }
