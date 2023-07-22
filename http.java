@@ -1,47 +1,54 @@
 
+
 import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableCellRenderer;
 import java.awt.*;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.http.HttpResponse.BodyHandlers;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
-public class http {
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(http::createAndShowGUI);
-    }
+public class http extends JFrame {
+    private Timer timer;
+    private int currentIndex;
+    private DefaultListModel<String> movieListModel;
+    private JSONArray results;
+    private JList<String> movieList;
+    private JLabel imageLabel;
 
-    private static void createAndShowGUI() {
-        JFrame frame = new JFrame("Movie Search");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setLayout(new BorderLayout());
+    public http() {
+        setTitle("Movie Slideshow");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         // Create input fields and fetch button
         JTextField genreField = new JTextField(20);
         JTextField languageField = new JTextField(20);
         JButton fetchButton = new JButton("Fetch Movies");
 
-        // Create table to display the movie data
-        DefaultTableModel tableModel = new DefaultTableModel(new Object[]{"Title", "Image", "Rating"}, 0);
-        JTable table = new JTable(tableModel);
-        JScrollPane scrollPane = new JScrollPane(table);
-
-        // Set the custom cell renderer for the second column (image column)
-        table.getColumnModel().getColumn(1).setCellRenderer(new ImageRenderer());
-
-        fetchButton.addActionListener(e -> {
-            String genre = genreField.getText();
-            String lang = languageField.getText();
-            fetchMovies(genre, lang, tableModel);
+        fetchButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String genre = genreField.getText();
+                String lang = languageField.getText();
+                fetchMovies(genre, lang);
+                startSlideshow();
+            }
         });
 
-        // Create input panel
+        // Create list to display movie details
+        movieListModel = new DefaultListModel<>();
+        movieList = new JList<>(movieListModel);
+
+        // Create label to display movie images
+        imageLabel = new JLabel();
+        imageLabel.setPreferredSize(new Dimension(400, 300));
+        imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        // Create panel to hold input fields and fetch button
         JPanel inputPanel = new JPanel();
         inputPanel.add(new JLabel("Enter genre:"));
         inputPanel.add(genreField);
@@ -49,96 +56,101 @@ public class http {
         inputPanel.add(languageField);
         inputPanel.add(fetchButton);
 
-        // Add components to the frame
-        frame.add(inputPanel, BorderLayout.NORTH);
-        frame.add(scrollPane, BorderLayout.CENTER);
+        // Create panel to hold the movie list and image
+        JPanel moviePanel = new JPanel(new BorderLayout());
+        moviePanel.add(new JScrollPane(movieList), BorderLayout.WEST);
+        moviePanel.add(imageLabel, BorderLayout.CENTER);
 
-        frame.pack();
-        frame.setVisible(true);
+        // Add components to the frame
+        add(inputPanel, BorderLayout.NORTH);
+        add(moviePanel, BorderLayout.CENTER);
+
+        pack();
+        setLocationRelativeTo(null);
     }
 
-    public static void fetchMovies(String genre, String lang, DefaultTableModel tableModel) {
+    public void fetchMovies(String genre, String lang) {
         try {
             String apiUrl = "https://ott-details.p.rapidapi.com/advancedsearch?start_year=2020&end_year=2020&min_imdb=6&max_imdb=7.8&genre=" + genre + "&language=" + lang + "&type=movie&sort=latest&page=1";
 
-            HttpRequest request = HttpRequest.newBuilder(new URI(apiUrl))
-                    .header("X-RapidAPI-Key", "0c41303e37msh3ca9c5049b62129p1efd89jsndaaf78084778") // Replace with your API key
-                    .header("X-RapidAPI-Host", "ott-details.p.rapidapi.com")
-                    .build();
-            HttpClient client = HttpClient.newHttpClient();
-            HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
-            String responseBody = response.body();
-            System.out.println(responseBody); // Print the API response in the console
+            URL url = new URL(apiUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestProperty("X-RapidAPI-Key", "0c41303e37msh3ca9c5049b62129p1efd89jsndaaf78084778");
+            conn.setRequestProperty("X-RapidAPI-Host", "ott-details.p.rapidapi.com");
+            conn.setRequestMethod("GET");
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                response.append(line);
+            }
+            reader.close();
 
             JSONParser parser = new JSONParser();
-            JSONObject json = (JSONObject) parser.parse(responseBody);
-            JSONArray results = (JSONArray) json.get("results");
+            JSONObject json = (JSONObject) parser.parse(response.toString());
+            results = (JSONArray) json.get("results");
+            currentIndex = 0;
 
-            // Clear the existing table data
-            tableModel.setRowCount(0);
+            // Clear the movie list model
+            movieListModel.clear();
 
-            if (results == null || results.isEmpty()) {
-                // Display a message in the GUI when no movies are found
-                JOptionPane.showMessageDialog(null, "No movies found for the given genre and language.", "No Movies", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                // Iterate over the first 10 results and add them to the table
-                int limit = Math.min(results.size(), 10); // Limit to the first 10 movies
-                for (int i = 0; i < limit; i++) {
-                    JSONObject movie = (JSONObject) results.get(i);
+            if (results != null && !results.isEmpty()) {
+                // Iterate over the fetched movies and add their details to the list model
+                for (Object obj : results) {
+                    JSONObject movie = (JSONObject) obj;
                     String title = (String) movie.get("title");
-                    JSONArray imgUrls = (JSONArray) movie.get("imageurl");
-
-                    ImageIcon imageIcon = null;
-                    if (imgUrls != null && !imgUrls.isEmpty()) {
-                        // Get the first image URL
-                        String imageUrl = (String) imgUrls.get(0);
-
-                        // Load the image from the URL using ImageIcon
-                        try {
-                            imageIcon = new ImageIcon(new URI(imageUrl).toURL());
-                        } catch (Exception e) {
-                            // Handle any errors while loading the image
-                            e.printStackTrace();
-                        }
-                    }
-
-                    Object[] rowData = new Object[3];
-                    rowData[0] = title;
-                    rowData[1] = imageIcon; // Use the ImageIcon object instead of the image URL
-
-                    try {
-                        Double rating = (Double) movie.get("imdbrating");
-                        rowData[2] = rating;
-                    } catch (Exception e) {
-                        long rating = (long) movie.get("imdbrating");
-                        rowData[2] = rating;
-                    }
-
-                    tableModel.addRow(rowData);
+                    Number rating = (Number) movie.get("imdbrating");
+                    movieListModel.addElement(title + " (Rating: " + rating + ")");
                 }
+            } else {
+                // Display a message in the GUI when no movies are found
+                movieListModel.addElement("No movies found for the given genre and language.");
             }
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(null, "Error occurred: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
         }
     }
 
-    // Custom cell renderer to display the ImageIcon properly in the table cell
-    private static class ImageRenderer extends JLabel implements TableCellRenderer {
-        public ImageRenderer() {
-            setOpaque(true);
-        }
-
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-            if (value instanceof ImageIcon) {
-                ImageIcon icon = (ImageIcon) value;
-                setIcon(icon);
-            } else {
-                // If the value is not an ImageIcon, clear the icon to prevent displaying old images in the table.
-                setIcon(null);
+    public void startSlideshow() {
+        timer = new Timer(3000, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                showNextMovie();
             }
-            return this;
+        });
+        timer.start();
+    }
+
+    public void showNextMovie() {
+        if (results != null && !results.isEmpty()) {
+            if (currentIndex >= results.size()) {
+                currentIndex = 0; // Reset index to loop through the movies
+            }
+
+            JSONObject movie = (JSONObject) results.get(currentIndex);
+            JSONArray imgUrls = (JSONArray) movie.get("imageurl");
+            if (imgUrls != null && !imgUrls.isEmpty()) {
+                String imageUrl = (String) imgUrls.get(0);
+
+                // Load the image from the URL using ImageIcon
+                try {
+                    ImageIcon imageIcon = new ImageIcon(new URL(imageUrl));
+                    imageLabel.setIcon(imageIcon);
+                } catch (Exception e) {
+                    // Handle any errors while loading the image
+                    e.printStackTrace();
+                }
+            }
+
+            currentIndex++;
         }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            http slideshow = new http();
+            slideshow.setVisible(true);
+        });
     }
 }
