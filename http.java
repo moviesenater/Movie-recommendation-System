@@ -1,5 +1,3 @@
-
-
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -11,7 +9,6 @@ import java.net.URL;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
-
 public class http extends JFrame {
     private Timer timer;
     private int currentIndex;
@@ -55,20 +52,16 @@ public class http extends JFrame {
         inputPanel.add(new JLabel("Enter language:"));
         inputPanel.add(languageField);
         inputPanel.add(fetchButton);
-
         // Create panel to hold the movie list and image
         JPanel moviePanel = new JPanel(new BorderLayout());
         moviePanel.add(new JScrollPane(movieList), BorderLayout.WEST);
         moviePanel.add(imageLabel, BorderLayout.CENTER);
-
         // Add components to the frame
         add(inputPanel, BorderLayout.NORTH);
         add(moviePanel, BorderLayout.CENTER);
-
         pack();
         setLocationRelativeTo(null);
     }
-
     public void fetchMovies(String genre, String lang) {
         try {
             String apiUrl = "https://ott-details.p.rapidapi.com/advancedsearch?start_year=2020&end_year=2020&min_imdb=6&max_imdb=7.8&genre=" + genre + "&language=" + lang + "&type=movie&sort=latest&page=1";
@@ -130,19 +123,18 @@ public class http extends JFrame {
 
             JSONObject movie = (JSONObject) results.get(currentIndex);
             JSONArray imgUrls = (JSONArray) movie.get("imageurl");
+            String imageUrl = "https://img.freepik.com/free-vector/oops-404-error-with-broken-robot-concept-illustration_114360-5529.jpg?w=740&t=st=1690003703~exp=1690004303~hmac=46853b6fe675852fc58699c8329f90a72e08c82a00cc1cf537f9011a6972a46c";
             if (imgUrls != null && !imgUrls.isEmpty()) {
-                String imageUrl = (String) imgUrls.get(0);
-
-                // Load the image from the URL using ImageIcon
-                try {
-                    ImageIcon imageIcon = new ImageIcon(new URL(imageUrl));
-                    imageLabel.setIcon(imageIcon);
-                } catch (Exception e) {
-                    // Handle any errors while loading the image
-                    e.printStackTrace();
-                }
+                imageUrl = (String) imgUrls.get(0);
             }
-
+            // Load the image from the URL using ImageIcon
+            try {
+                ImageIcon imageIcon = new ImageIcon(new URL(imageUrl));
+                imageLabel.setIcon(imageIcon);
+            } catch (Exception e) {
+                // Handle any errors while loading the image
+                e.printStackTrace();
+            }
             currentIndex++;
         }
     }
